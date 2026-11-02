@@ -1,0 +1,3 @@
+rumps>=0.4
+icalendar>=5
+recurring-ical-events>=2

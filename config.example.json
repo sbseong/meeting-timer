@@ -1,0 +1,9 @@
+{
+  "ical_urls": [],
+  "my_email": "",
+  "refresh_minutes": 5,
+  "alert_minutes": [10, 5, 1],
+  "popup_at_start": true,
+  "include_all_day": false,
+  "port": 8765
+}

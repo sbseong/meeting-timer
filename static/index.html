@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>회의 카운트다운</title>
+<style>
+  :root {
+    --bg: #0f1115; --card: #181b22; --line: #252932; --text: #e8eaed; --muted: #8a9099;
+    --ok: #34c759; --warn: #ffcc00; --hot: #ff9500; --late: #ff3b30; --now: #5ac8fa;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, "Apple SD Gothic Neo", sans-serif;
+    background: var(--bg); color: var(--text); min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center; padding: 36px 20px;
+  }
+  body.late { animation: flash 1s infinite; }
+  @keyframes flash { 50% { background: #3a0d0d; } }
+
+  .top { display: flex; gap: 20px; width: 100%; max-width: 1100px; flex-wrap: wrap; }
+  .panel { background: var(--card); border-radius: 18px; padding: 26px 30px; flex: 1 1 420px; min-width: 0; }
+  .panel.empty-panel { opacity: .5; }
+  .label { color: var(--muted); font-size: 15px; letter-spacing: .05em; font-weight: 600; }
+  .title { font-size: 28px; font-weight: 700; margin: 8px 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .when { color: var(--muted); font-size: 16px; min-height: 1.2em; }
+  .count {
+    font-variant-numeric: tabular-nums; font-weight: 800; line-height: 1.05;
+    font-size: clamp(56px, 9vw, 120px); margin: 18px 0 10px; transition: color .4s;
+  }
+  .sub { color: var(--muted); font-size: 15px; }
+  .bar { height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; margin-top: 16px; }
+  .bar > div { height: 100%; background: var(--now); width: 0; transition: width 1s linear; }
+  .join {
+    display: none; margin-top: 18px; color: #000; font-weight: 700; padding: 10px 22px;
+    border-radius: 999px; text-decoration: none; font-size: 16px;
+  }
+  #nowPanel .join { background: var(--now); }
+  #nextPanel .join { background: var(--ok); }
+  .gap { margin-top: 10px; font-size: 14px; color: var(--muted); }
+
+  .lists { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 24px; width: 100%; max-width: 1100px; }
+  .list { background: var(--card); border-radius: 14px; padding: 18px 22px; flex: 1 1 420px; }
+  .list h3 { margin: 0 0 12px; font-size: 15px; color: var(--muted); font-weight: 600; }
+  .row { display: flex; gap: 14px; padding: 7px 0; border-top: 1px solid var(--line); font-size: 15px; }
+  .row:first-of-type { border-top: none; }
+  .row .t { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 100px; }
+  .row.past { opacity: .4; }
+  .row.now .t, .row.now .n { color: var(--now); font-weight: 700; }
+  .row.next .n { font-weight: 700; }
+  .row a { color: inherit; }
+  .empty { color: var(--muted); font-size: 14px; }
+  #status { margin-top: 24px; color: var(--muted); font-size: 12px; }
+  #status button { background: none; border: 1px solid #333; color: var(--muted); border-radius: 6px; cursor: pointer; margin-left: 8px; }
+  #err { color: var(--late); }
+</style>
+</head>
+<body>
+  <div class="top">
+    <!-- 지금 진행 중인 회의: 끝까지 남은 시간 -->
+    <div class="panel" id="nowPanel">
+      <div class="label" id="nowLabel">지금 회의</div>
+      <div class="title" id="nowTitle">—</div>
+      <div class="when" id="nowWhen"></div>
+      <div class="count" id="nowCount" style="color: var(--now)">--:--</div>
+      <div class="sub" id="nowSub"></div>
+      <div class="bar"><div id="nowBar"></div></div>
+      <a class="join" id="nowJoin" target="_blank" rel="noopener">회의 링크 열기</a>
+    </div>
+    <!-- 다음 회의: 시작까지 남은 시간 -->
+    <div class="panel" id="nextPanel">
+      <div class="label">다음 회의까지</div>
+      <div class="title" id="nextTitle">불러오는 중…</div>
+      <div class="when" id="nextWhen"></div>
+      <div class="count" id="nextCount">--:--</div>
+      <div class="sub" id="nextSub"></div>
+      <div class="gap" id="gap"></div>
+      <a class="join" id="nextJoin" target="_blank" rel="noopener">회의 참여하기</a>
+    </div>
+  </div>
+
+  <div class="lists">
+    <div class="list"><h3>오늘</h3><div id="today"></div></div>
+    <div class="list"><h3>내일</h3><div id="tomorrow"></div></div>
+  </div>
+
+  <div id="status"><span id="sync"></span> <span id="err"></span>
+    <button onclick="refreshNow()">지금 새로고침</button></div>
+
+<script>
+let state = null;
+const $ = id => document.getElementById(id);
+const pad = n => String(n).padStart(2, "0");
+const hm = d => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const esc = s => s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+// 다음 회의 색: 10분 넘게 남음 초록, 10분 이내 노랑, 5분 이내 주황, 1분 이내 빨강
+function colorFor(sec) {
+  if (sec <= 60) return "var(--late)";
+  if (sec <= 300) return "var(--hot)";
+  if (sec <= 600) return "var(--warn)";
+  return "var(--ok)";
+}
+function fmt(sec) {
+  sec = Math.max(0, Math.floor(sec));
+  const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+  return h ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
+function setLink(el, link) {
+  el.style.display = link ? "inline-block" : "none";
+  if (link) el.href = link;
+}
+
+function renderList(el, events, now, cur, next) {
+  if (!events.length) { el.innerHTML = '<div class="empty">일정 없음</div>'; return; }
+  el.innerHTML = events.map(e => {
+    const s = new Date(e.start), en = new Date(e.end);
+    const cls = en <= now ? "past" : (s <= now ? "now" : (next && e.start === next.start && e.title === next.title ? "next" : ""));
+    const name = e.link ? `<a href="${e.link}" target="_blank">${esc(e.title)}</a>` : esc(e.title);
+    return `<div class="row ${cls}"><span class="t">${hm(s)}–${hm(en)}</span><span class="n">${name}</span></div>`;
+  }).join("");
+}
+
+function tick() {
+  if (!state) return;
+  const now = new Date();
+  const all = [...state.today, ...state.tomorrow];
+  const current = all.filter(e => new Date(e.start) <= now && now < new Date(e.end));
+  const cur = current[current.length - 1] || null;   // 겹치면 가장 늦게 시작한 회의
+  const next = all.find(e => new Date(e.start) > now) || null;
+
+  // --- 지금 회의 ---
+  const late = cur && (now - new Date(cur.start)) < 5 * 60 * 1000;
+  document.body.classList.toggle("late", !!late);
+  $("nowPanel").classList.toggle("empty-panel", !cur);
+  if (cur) {
+    const s = new Date(cur.start), en = new Date(cur.end);
+    $("nowLabel").textContent = late ? "이미 시작했어요!" : "지금 회의 · 끝까지";
+    $("nowTitle").textContent = cur.title;
+    $("nowWhen").textContent = `${hm(s)}–${hm(en)}${cur.location ? " · " + cur.location : ""}`;
+    $("nowCount").textContent = fmt((en - now) / 1000);
+    $("nowCount").style.color = late ? "var(--late)" : "var(--now)";
+    $("nowSub").textContent = late ? `시작한 지 ${fmt((now - s) / 1000)}` : `${hm(en)}에 끝남 · ${fmt((now - s) / 1000)} 지남`;
+    $("nowBar").style.width = `${Math.min(100, (now - s) / (en - s) * 100)}%`;
+    const others = current.filter(e => e !== cur);
+    if (others.length) $("nowSub").textContent += ` · 겹치는 회의: ${others.map(e => e.title).join(", ")}`;
+    setLink($("nowJoin"), cur.link);
+  } else {
+    $("nowLabel").textContent = "지금 회의";
+    $("nowTitle").textContent = "진행 중인 회의 없음";
+    $("nowWhen").textContent = $("nowSub").textContent = "";
+    $("nowCount").textContent = "—";
+    $("nowBar").style.width = "0";
+    setLink($("nowJoin"), "");
+  }
+
+  // --- 다음 회의 ---
+  if (next) {
+    const s = new Date(next.start), en = new Date(next.end);
+    const sec = (s - now) / 1000;
+    const dayTag = s.toDateString() === now.toDateString() ? "" : "내일 ";
+    $("nextTitle").textContent = next.title;
+    $("nextWhen").textContent = `${dayTag}${hm(s)}–${hm(en)}${next.location ? " · " + next.location : ""}`;
+    $("nextCount").textContent = fmt(sec);
+    $("nextCount").style.color = colorFor(sec);
+    $("nextSub").textContent = `${dayTag}${hm(s)}에 시작`;
+    // 지금 회의가 끝나고 다음 회의까지 쉬는 시간 (겹치면 경고)
+    if (cur) {
+      const gapMin = Math.round((s - new Date(cur.end)) / 60000);
+      $("gap").textContent = gapMin < 0 ? `⚠ 지금 회의와 ${-gapMin}분 겹침`
+                           : gapMin === 0 ? "⚠ 지금 회의 끝나자마자 바로 시작"
+                           : `지금 회의 끝나고 ${gapMin}분 여유`;
+      $("gap").style.color = gapMin <= 0 ? "var(--hot)" : "";
+    } else {
+      $("gap").textContent = "";
+    }
+    setLink($("nextJoin"), next.link);
+  } else {
+    $("nextTitle").textContent = "오늘·내일 남은 회의 없음";
+    $("nextWhen").textContent = $("nextSub").textContent = $("gap").textContent = "";
+    $("nextCount").textContent = "—";
+    $("nextCount").style.color = "var(--muted)";
+    setLink($("nextJoin"), "");
+  }
+
+  // --- 탭 제목 ---
+  const parts = [];
+  if (cur) parts.push(late ? `🔴 +${fmt((now - new Date(cur.start)) / 1000)}` : `▶ ${fmt((new Date(cur.end) - now) / 1000)} 남음`);
+  if (next) parts.push(`다음 ${fmt((new Date(next.start) - now) / 1000)}`);
+  document.title = parts.length ? parts.join(" │ ") : "회의 카운트다운";
+
+  renderList($("today"), state.today, now, cur, next);
+  renderList($("tomorrow"), state.tomorrow, now, cur, next);
+}
+
+async function load() {
+  try {
+    const r = await fetch("/api/state");
+    state = await r.json();
+    $("sync").textContent = state.last_ok ? `캘린더 동기화 ${hm(new Date(state.last_ok))}` : "동기화 전";
+    $("err").textContent = state.error ? `⚠ ${state.error}` : "";
+  } catch (e) {
+    $("err").textContent = "⚠ 서버에 연결할 수 없음 (앱이 꺼져 있나요?)";
+  }
+  tick();
+}
+async function refreshNow() {
+  await fetch("/api/refresh", { method: "POST" });
+  setTimeout(load, 2500);
+}
+
+load();
+setInterval(tick, 1000);
+setInterval(load, 30 * 1000);
+</script>
+</body>
+</html>
