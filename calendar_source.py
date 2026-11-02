@@ -68,6 +68,13 @@ def load_config() -> dict:
     return cfg
 
 
+def save_setting(key: str, value) -> None:
+    """메뉴에서 바꾼 설정 하나를 config.json 에 저장한다 (다른 항목은 그대로 둔다)."""
+    cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8")) if CONFIG_PATH.exists() else {}
+    cfg[key] = value
+    CONFIG_PATH.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
 @dataclass
 class Event:
     title: str

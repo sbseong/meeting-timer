@@ -14,11 +14,12 @@ from datetime import datetime
 
 import rumps
 
-from calendar_source import CalendarFeed, Event
+from calendar_source import CalendarFeed, Event, save_setting
 from server import serve
 
 TITLE_MAX = 14   # 메뉴바에 보일 회의 제목 최대 글자 수
 SHORT_BOTH = 8   # 지금·다음 회의를 같이 보일 때 제목 글자 수
+MOVE_CHOICES = [1, 2, 3, 4, 5]  # 메뉴에서 고를 수 있는 '이동 알림' 시점(분 전)
 END_SOON = 300   # 지금 회의가 이 초 이하로 남으면 빨간 표식
 
 
@@ -107,6 +108,7 @@ class MeetingTimerApp(rumps.App):
         self.menu.clear()
         self.menu.add(rumps.MenuItem("대시보드 열기", callback=lambda _: webbrowser.open(f"http://127.0.0.1:{self.port}")))
         self.menu.add(rumps.MenuItem("지금 새로고침", callback=lambda _: self.feed.refresh_now()))
+        self.menu.add(self._move_menu())
         self.menu.add(rumps.separator)
         self.menu.add(rumps.MenuItem("오늘 일정"))
         if not todays:
@@ -121,6 +123,21 @@ class MeetingTimerApp(rumps.App):
             self.menu.add(rumps.MenuItem(f"⚠ {self.feed.last_error[:80]}"))
         self.menu.add(rumps.separator)
         self.menu.add(rumps.MenuItem("종료", callback=lambda _: rumps.quit_application()))
+
+    def _move_menu(self) -> rumps.MenuItem:
+        """'이동 알림' 하위 메뉴: 1~5분 전 중 하나를 고른다. 고른 값은 config.json 에 저장."""
+        cur = self.feed.cfg.get("move_alert_minutes", 3) or 0
+        parent = rumps.MenuItem(f"이동 알림: {cur}분 전" if cur else "이동 알림: 꺼짐")
+        for m in MOVE_CHOICES:
+            item = rumps.MenuItem(f"{m}분 전", callback=(lambda m: (lambda _: self._set_move(m)))(m))
+            item.state = int(m == cur)
+            parent.add(item)
+        return parent
+
+    def _set_move(self, minutes: int) -> None:
+        self.feed.cfg["move_alert_minutes"] = minutes
+        save_setting("move_alert_minutes", minutes)
+        self._menu_sig = None  # 체크 표시를 바로 다시 그린다
 
     # --- 1초마다 ---
     def tick(self, _):
