@@ -128,11 +128,14 @@ class MeetingTimerApp(rumps.App):
         """'이동 알림' 하위 메뉴: 1~5분 전 중 하나를 고르거나 끈다. 고른 값은 config.json 에 저장."""
         cur = self.feed.cfg.get("move_alert_minutes", 3) or 0
         parent = rumps.MenuItem(f"이동 알림: {cur}분 전" if cur else "이동 알림: 꺼짐")
-        for m in [0] + MOVE_CHOICES:  # 0 = 끄기
-            label = "0분 (끄기)" if m == 0 else f"{m}분 전"
-            item = rumps.MenuItem(label, callback=(lambda m: (lambda _: self._set_move(m)))(m))
+        for m in MOVE_CHOICES:
+            item = rumps.MenuItem(f"{m}분 전", callback=(lambda m: (lambda _: self._set_move(m)))(m))
             item.state = int(m == cur)
             parent.add(item)
+        parent.add(rumps.separator)  # 끄기는 맨 아래 따로
+        off = rumps.MenuItem("0분 (끄기)", callback=lambda _: self._set_move(0))
+        off.state = int(cur == 0)
+        parent.add(off)
         return parent
 
     def _set_move(self, minutes: int) -> None:
