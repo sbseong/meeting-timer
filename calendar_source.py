@@ -82,11 +82,17 @@ class Event:
         return d
 
 
+def _safe_link(u: str) -> str:
+    """http/https 링크만 남긴다. 초대장에 javascript: 같은 주소가 들어와도 열지 않는다."""
+    u = u.strip()
+    return u if URL_RE.fullmatch(u) else ""
+
+
 def _find_meeting_link(comp) -> str:
     for key in ("X-GOOGLE-CONFERENCE", "URL"):
-        v = comp.get(key)
+        v = _safe_link(str(comp.get(key) or ""))
         if v:
-            return str(v)
+            return v
     text = f"{comp.get('LOCATION', '')} {comp.get('DESCRIPTION', '')}"
     urls = URL_RE.findall(text)
     for u in urls:

@@ -93,6 +93,7 @@ const $ = id => document.getElementById(id);
 const pad = n => String(n).padStart(2, "0");
 const hm = d => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 const esc = s => s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const safeLink = u => /^https?:\/\//i.test(u || "") ? u : "";  // http/https 링크만
 
 // 다음 회의 색: 10분 넘게 남음 초록, 10분 이내 노랑, 5분 이내 주황, 1분 이내 빨강
 function colorFor(sec) {
@@ -107,6 +108,7 @@ function fmt(sec) {
   return h ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
 }
 function setLink(el, link) {
+  link = safeLink(link);
   el.style.display = link ? "inline-block" : "none";
   if (link) el.href = link;
 }
@@ -116,7 +118,8 @@ function renderList(el, events, now, cur, next) {
   el.innerHTML = events.map(e => {
     const s = new Date(e.start), en = new Date(e.end);
     const cls = en <= now ? "past" : (s <= now ? "now" : (next && e.start === next.start && e.title === next.title ? "next" : ""));
-    const name = e.link ? `<a href="${e.link}" target="_blank">${esc(e.title)}</a>` : esc(e.title);
+    const link = safeLink(e.link);
+    const name = link ? `<a href="${esc(link)}" target="_blank" rel="noopener">${esc(e.title)}</a>` : esc(e.title);
     return `<div class="row ${cls}"><span class="t">${hm(s)}–${hm(en)}</span><span class="n">${name}</span></div>`;
   }).join("");
 }
@@ -139,7 +142,8 @@ function tick() {
     $("nowTitle").textContent = cur.title;
     $("nowWhen").textContent = `${hm(s)}–${hm(en)}${cur.location ? " · " + cur.location : ""}`;
     $("nowCount").textContent = fmt((en - now) / 1000);
-    $("nowCount").style.color = late ? "var(--late)" : "var(--now)";
+    const endSoon = (en - now) <= 5 * 60 * 1000;  // 끝나기 5분 전부터 빨강
+    $("nowCount").style.color = (late || endSoon) ? "var(--late)" : "var(--now)";
     $("nowSub").textContent = late ? `시작한 지 ${fmt((now - s) / 1000)}` : `${hm(en)}에 끝남 · ${fmt((now - s) / 1000)} 지남`;
     $("nowBar").style.width = `${Math.min(100, (now - s) / (en - s) * 100)}%`;
     const others = current.filter(e => e !== cur);

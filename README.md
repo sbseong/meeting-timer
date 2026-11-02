@@ -12,6 +12,7 @@
 - 메뉴바 : 지금 회의(끝까지 남은 시간)와 다음 회의(시작까지 남은 시간)를 1초마다 표시
   - 다음 회의 색 : 🟢 10분 초과 · 🟡 10분 이내 · 🟠 5분 이내 · 🔴 1분 이내
   - 회의 시작 후 5분 동안 : `🔴 주간회의 +01:20` (지난 시간)
+  - 회의 끝나기 5분 전부터 : `🔴 주간회의 04:59 남음`
   - 메뉴 : 오늘 일정 목록. 일정을 누르면 회의 링크(Meet·Zoom·Teams) 열림
 - 알림 : 10·5·1분 전 맥 알림 (소리 포함)
 - 시작 시각 : 화면 가운데 경고창. 「참여하기」를 누르면 회의 링크 열림
@@ -23,14 +24,17 @@
 
 ## 요구 사항
 - macOS, Python 3.10 이상
+  - 맥 기본 `python3`은 3.9라서 그대로는 설치가 멈춤. 먼저 새 파이썬 설치 : `brew install python@3.12` (또는 python.org 설치 파일)
 - 구글 캘린더의 **iCal 형식 비공개 주소** (회사 계정은 관리자가 막아 두었을 수 있음)
 
 ## 설치
 ```zsh
 git clone https://github.com/sbseong/meeting-timer.git
 cd meeting-timer
-./setup.sh
+./setup.sh                          # 기본 python3 사용
+PYTHON=python3.12 ./setup.sh        # 파이썬을 골라 쓸 때
 ```
+- `Python 3.10 이상이 필요합니다` 가 나오면 위 요구 사항대로 새 파이썬을 설치한 뒤 `PYTHON=` 으로 지정
 
 ## 캘린더 주소 저장 (맥 키체인)
 캘린더 주소는 파일이 아닌 **맥 키체인**에 저장. 앱이 주소를 읽을 때마다 맥이 확인 창을 띄우고, 로그인 암호를 넣어야 허용됨.
@@ -77,6 +81,7 @@ cd meeting-timer
 - 대시보드는 `127.0.0.1` 에만 열림. 같은 맥에서만 접속 가능
 - 다른 웹사이트가 대시보드 API로 일정을 읽지 못하게 Host·Origin 헤더 확인
 - 오류 문구에 캘린더 주소가 나오지 않게 가림
+- 회의 링크는 `http`/`https` 주소만 열고, 그 밖의 주소(`javascript:` 등)는 무시
 
 ## 파일
 - `calendar_source.py` : iCal 받기, 반복 일정 펼치기, 거절·종일 일정 거르기, 키체인 읽기
@@ -93,11 +98,17 @@ A small macOS menu bar app that reads your Google Calendar and shows, every seco
 
 It also sends notifications 10/5/1 minutes before, pops up a dialog with a "Join" button at start time, and serves a local dashboard at http://127.0.0.1:8765. The UI text is in Korean.
 
+### Requirements
+- macOS, Python 3.10+ (the stock macOS `python3` is 3.9; install a newer one, e.g. `brew install python@3.12`)
+- The **secret iCal address** of your Google Calendar (may be disabled by your Workspace admin)
+
 ### Install
 ```zsh
 git clone https://github.com/sbseong/meeting-timer.git
 cd meeting-timer
 ./setup.sh            # creates .venv and installs rumps, icalendar, recurring-ical-events
+# or pick a Python explicitly:
+PYTHON=python3.12 ./setup.sh
 ```
 
 ### Store your calendar URL in the macOS Keychain

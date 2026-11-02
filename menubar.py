@@ -19,6 +19,7 @@ from server import serve
 
 TITLE_MAX = 14   # 메뉴바에 보일 회의 제목 최대 글자 수
 SHORT_BOTH = 8   # 지금·다음 회의를 같이 보일 때 제목 글자 수
+END_SOON = 300   # 지금 회의가 이 초 이하로 남으면 빨간 표식
 
 
 def fmt(sec: float) -> str:
@@ -142,7 +143,9 @@ class MeetingTimerApp(rumps.App):
             if elapsed < 300:  # 시작 5분 안: 지각 경고
                 parts.append(f"🔴 {short(ev.title, n)} +{fmt(elapsed)}")
             else:
-                parts.append(f"▶ {short(ev.title, n)} {fmt((ev.end - now).total_seconds())} 남음")
+                left = (ev.end - now).total_seconds()
+                mark = "🔴" if left <= END_SOON else "▶"  # 끝나기 5분 전부터 빨강
+                parts.append(f"{mark} {short(ev.title, n)} {fmt(left)} 남음")
         if nxt:
             sec = (nxt.start - now).total_seconds()
             prefix = "" if nxt.start.date() == now.date() else "내일 "
