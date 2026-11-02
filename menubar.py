@@ -133,7 +133,7 @@ class MeetingTimerApp(rumps.App):
             item.state = int(m == cur)
             parent.add(item)
         parent.add(rumps.separator)  # 끄기는 맨 아래 따로
-        off = rumps.MenuItem("0분 (끄기)", callback=lambda _: self._set_move(0))
+        off = rumps.MenuItem("끄기 (사전 알람 없음)", callback=lambda _: self._set_move(0))
         off.state = int(cur == 0)
         parent.add(off)
         return parent
