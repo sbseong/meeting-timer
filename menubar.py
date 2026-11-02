@@ -1,7 +1,8 @@
 """맥 메뉴바에 다음 회의까지 남은 시간을 1초마다 보여 준다.
 
 - 메뉴바: '🟢 주간회의 12:34' 꼴. 남은 시간에 따라 🟢(10분 초과) 🟡(10분 이내) 🟠(5분 이내) 🔴(1분 이내·지각)
-- 알림: config 의 alert_minutes(기본 10·5·1분 전)에 맥 알림
+- 이동 알림: 회의 N분 전(기본 3분, 메뉴에서 1~5분·끄기) 화면 가운데 경고창
+- 알림: config 의 alert_minutes(기본 없음)에 맥 알림
 - 시작 시각: 화면 가운데 경고창 (참여 링크가 있으면 '참여하기' 버튼)
 - 같은 프로세스에서 브라우저 대시보드(http://127.0.0.1:8765)도 띄운다
 """
@@ -83,7 +84,7 @@ class MeetingTimerApp(rumps.App):
         super().__init__("⏳", quit_button=None)
         self.feed = CalendarFeed()
         self.port = self.feed.cfg.get("port", 8765)
-        self.alert_minutes = sorted(self.feed.cfg.get("alert_minutes", [10, 5, 1]), reverse=True)
+        self.alert_minutes = sorted(self.feed.cfg.get("alert_minutes", []), reverse=True)
         self.fired: set[tuple] = set()
         self._menu_sig = None
         self.feed.start_background()

@@ -26,7 +26,7 @@ DEFAULT_CONFIG = {
     "ical_urls": [],             # 비워 두면 맥 키체인에서 읽는다 (권장)
     "my_email": "",              # 거절한 일정을 빼는 데 씀. 비우면 캘린더 이름(구글은 메일 주소)으로 추정
     "refresh_minutes": 5,        # 캘린더를 다시 받아오는 주기
-    "alert_minutes": [10, 5, 1], # 회의 몇 분 전에 알림을 띄울지
+    "alert_minutes": [],         # 회의 몇 분 전에 오른쪽 위 알림을 띄울지. 기본은 없음 (구글 캘린더 알림과 겹침)
     "move_alert_minutes": 3,     # 회의 몇 분 전에 '이동하세요' 경고창을 띄울지. 0 이면 끔
     "popup_at_start": True,      # 시작 시각에 화면 가운데 경고창
     "include_all_day": False,

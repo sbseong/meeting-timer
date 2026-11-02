@@ -2,7 +2,7 @@
   "ical_urls": [],
   "my_email": "",
   "refresh_minutes": 5,
-  "alert_minutes": [10, 5, 1],
+  "alert_minutes": [],
   "move_alert_minutes": 3,
   "popup_at_start": true,
   "include_all_day": false,
