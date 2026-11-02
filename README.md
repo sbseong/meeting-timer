@@ -15,6 +15,7 @@
   - 회의 끝나기 5분 전부터 : `🔴 주간회의 04:59 남음`
   - 메뉴 : 오늘 일정 목록. 일정을 누르면 회의 링크(Meet·Zoom·Teams) 열림
 - 알림 : 10·5·1분 전 맥 알림 (소리 포함)
+- 이동 알림 : 3분 전 화면 가운데 「지금 이동하세요」 경고창 (분은 `move_alert_minutes` 로 바꾸거나 `0` 으로 끔)
 - 시작 시각 : 화면 가운데 경고창. 「참여하기」를 누르면 회의 링크 열림
 - 대시보드 : http://127.0.0.1:8765
   - 지금 회의(진행 막대) / 다음 회의 카운트다운 / 두 회의 사이 여유 시간 / 오늘·내일 일정
@@ -73,6 +74,7 @@ PYTHON=python3.12 ./setup.sh        # 파이썬을 골라 쓸 때
 | `my_email` | `""` | 거절한 일정을 빼는 기준. 비우면 캘린더 이름(구글 기본 캘린더는 소유자 메일)으로 추정 |
 | `refresh_minutes` | `5` | 캘린더를 다시 받는 주기(분) |
 | `alert_minutes` | `[10, 5, 1]` | 알림 시점(회의 몇 분 전) |
+| `move_alert_minutes` | `3` | 회의 몇 분 전에 「지금 이동하세요」 경고창을 띄울지. `0` 이면 끔 |
 | `popup_at_start` | `true` | 시작 시각 경고창 사용 여부 |
 | `include_all_day` | `false` | 종일 일정 포함 여부 |
 | `port` | `8765` | 대시보드 포트 |
@@ -96,7 +98,7 @@ A small macOS menu bar app that reads your Google Calendar and shows, every seco
 - **Current meeting**: time until it ends
 - **Next meeting**: time until it starts (color turns 🟢 → 🟡 → 🟠 → 🔴 as it approaches)
 
-It also sends notifications 10/5/1 minutes before, pops up a dialog with a "Join" button at start time, and serves a local dashboard at http://127.0.0.1:8765. The UI text is in Korean.
+It also sends notifications 10/5/1 minutes before, pops up a "time to move" dialog 3 minutes before (`move_alert_minutes`, `0` to disable) and another with a "Join" button at start time, and serves a local dashboard at http://127.0.0.1:8765. The UI text is in Korean.
 
 ### Requirements
 - macOS, Python 3.10+ (the stock macOS `python3` is 3.9; install a newer one, e.g. `brew install python@3.12`)

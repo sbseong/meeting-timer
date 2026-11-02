@@ -53,14 +53,22 @@ def notify(title: str, message: str) -> None:
     subprocess.Popen(["osascript", "-e", script])
 
 
-def popup(ev: Event) -> None:
-    """회의 시작 경고창. 앱이 멈추지 않도록 별도 스레드에서 띄운다."""
+def popup(ev: Event, minutes_before: int = 0) -> None:
+    """화면 가운데 경고창. minutes_before=0 이면 시작 알림, 그 밖이면 이동 알림.
+    앱이 멈추지 않도록 별도 스레드에서 띄운다."""
     def run():
         buttons = '{"닫기", "참여하기"}' if ev.link else '{"확인"}'
         default = "참여하기" if ev.link else "확인"
-        msg = f"{ev.start:%H:%M} 회의가 시작됐어요.\n{ev.location}".strip()
+        if minutes_before:
+            head = f"{minutes_before}분 뒤 {ev.start:%H:%M} 회의. 지금 이동하세요."
+            title = f"🚶 {ev.title}"
+        else:
+            head = f"{ev.start:%H:%M} 회의가 시작됐어요."
+            title = f"⏰ {ev.title}"
+        msg = f"{head}\n{ev.location}".strip()
         script = (
-            f'display dialog "{_osa(msg)}" with title "⏰ {_osa(ev.title)}" '
+            'beep\n'
+            f'display dialog "{_osa(msg)}" with title "{_osa(title)}" '
             f'buttons {buttons} default button "{default}" with icon caution giving up after 120'
         )
         out = subprocess.run(["osascript", "-e", script], capture_output=True, text=True).stdout
@@ -164,6 +172,10 @@ class MeetingTimerApp(rumps.App):
                 if m * 60 - 90 < sec <= m * 60 and (key, m) not in self.fired:
                     self.fired.add((key, m))
                     notify(f"{m}분 뒤 회의", f"{ev.start:%H:%M} {ev.title}")
+            move = self.feed.cfg.get("move_alert_minutes", 3) or 0
+            if move > 0 and move * 60 - 90 < sec <= move * 60 and (key, "move") not in self.fired:
+                self.fired.add((key, "move"))
+                popup(ev, minutes_before=move)
             if self.feed.cfg.get("popup_at_start", True) and -120 < sec <= 0 and (key, 0) not in self.fired:
                 self.fired.add((key, 0))
                 popup(ev)

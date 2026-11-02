@@ -3,6 +3,7 @@
   "my_email": "",
   "refresh_minutes": 5,
   "alert_minutes": [10, 5, 1],
+  "move_alert_minutes": 3,
   "popup_at_start": true,
   "include_all_day": false,
   "port": 8765
