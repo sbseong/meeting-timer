@@ -100,7 +100,9 @@ class MeetingTimerApp(rumps.App):
         events = self.feed.events_list()
         today = datetime.now().date()
         todays = [ev for ev in events if ev.start.date() == today]
-        sig = (tuple((ev.title, ev.start) for ev in todays), self.feed.last_error, datetime.now().minute)
+        sources = tuple((c["name"], c["id"], c["ok"]) for c in self.feed.sources)
+        denied = tuple(self.feed.kc_denied)
+        sig = (tuple((ev.title, ev.start) for ev in todays), self.feed.last_error, sources, denied, datetime.now().minute)
         if sig == self._menu_sig:
             return
         self._menu_sig = sig
@@ -110,6 +112,7 @@ class MeetingTimerApp(rumps.App):
         self.menu.add(rumps.MenuItem("대시보드 열기", callback=lambda _: webbrowser.open(f"http://127.0.0.1:{self.port}")))
         self.menu.add(rumps.MenuItem("지금 새로고침", callback=lambda _: self.feed.refresh_now()))
         self.menu.add(self._move_menu())
+        self.menu.add(self._calendars_menu(sources, denied))
         self.menu.add(rumps.separator)
         self.menu.add(rumps.MenuItem("오늘 일정"))
         if not todays:
@@ -124,6 +127,20 @@ class MeetingTimerApp(rumps.App):
             self.menu.add(rumps.MenuItem(f"⚠ {self.feed.last_error[:80]}"))
         self.menu.add(rumps.separator)
         self.menu.add(rumps.MenuItem("종료", callback=lambda _: rumps.quit_application()))
+
+    def _calendars_menu(self, sources: tuple, denied: tuple = ()) -> rumps.MenuItem:
+        """'연동된 캘린더' 하위 메뉴: 캘린더 이름 · 캘린더 ID(주소 속 메일 주소). 못 받은 캘린더는 ⚠ 표시.
+        비밀 토큰이 든 전체 주소는 보여 주지 않는다."""
+        title = f"연동된 캘린더: {len(sources)}개" + (f" (⚠ {len(denied)}개 허용 안 됨)" if denied else "")
+        parent = rumps.MenuItem(title)
+        if not sources and not denied:
+            parent.add(rumps.MenuItem("아직 없음 (불러오는 중이거나 키체인 허용 안 됨)"))
+        for name, cal_id, ok in sources:
+            label = name if name == cal_id else f"{name} · {cal_id}"
+            parent.add(rumps.MenuItem(label if ok else f"⚠ {label} (받기 실패)"))
+        for account in denied:
+            parent.add(rumps.MenuItem(f"⚠ 키체인 {account} : 허용 안 됨 → 「지금 새로고침」 누르면 다시 물음"))
+        return parent
 
     def _move_menu(self) -> rumps.MenuItem:
         """'이동 알림' 하위 메뉴: 1~5분 전 중 하나를 고르거나 끈다. 고른 값은 config.json 에 저장."""

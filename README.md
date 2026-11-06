@@ -22,7 +22,7 @@
   - 지금 회의(진행 막대) / 다음 회의 카운트다운 / 두 회의 사이 여유 시간 / 오늘·내일 일정
   - 지각이면 화면 깜빡임
 - 빼는 일정 : 종일 일정, 내가 거절한 일정, 취소된 일정 ('한가함' 일정은 기본으로 보임, `include_free`로 끔)
-- 여러 캘린더 지원 (같은 회의는 한 번만 표시)
+- 여러 캘린더 지원 (같은 회의는 한 번만 표시). 메뉴 「연동된 캘린더」에서 캘린더 이름·ID(메일 주소) 확인. 비밀 주소 전체는 표시하지 않음
 
 ## 요구 사항
 - macOS, Python 3.10 이상
@@ -47,15 +47,52 @@ PYTHON=python3.12 ./setup.sh        # 파이썬을 골라 쓸 때
    security add-generic-password -a ical -s meeting-timer -T "" -w
    ```
    - `-T ""` : 어떤 프로그램도 미리 허용하지 않음 → 읽을 때마다 확인 창
-   - 캘린더 추가 : `-a ical2`, `-a ical3` … (최대 `ical9`)로 따로 저장
-   - 한 항목에 주소 여러 개를 띄어 써서 넣으면 확인 창도 한 번만 뜸
+   - 캘린더가 여러 개면 아래 「캘린더 여러 개 연결」 참고
 3. `./run.sh` 로 실행 → 확인 창에서 로그인 암호를 넣고 **「허용」**
    - **「항상 허용」은 누르지 말 것.** 누르면 그 뒤로는 묻지 않음
    - 앱은 켤 때 한 번만 묻고, 주소는 메모리에만 둠
-   - 「거부」하면 다시 묻지 않음. 메뉴의 「지금 새로고침」을 누르면 다시 물음
+   - 「거부」하면 다시 묻지 않음. 메뉴의 「지금 새로고침」을 누르면 거부한 항목만 다시 물음
 
 - 주소 바꾸기 : `security delete-generic-password -a ical -s meeting-timer` 후 2번 다시, 앱 재시작
 - 비공개 주소는 비밀번호와 같음. 유출되면 구글 캘린더 같은 화면에서 「재설정」
+
+## 캘린더 여러 개 연결
+회사·개인 계정처럼 캘린더가 여러 개면 **캘린더마다 비공개 주소를 따로** 저장. 앱이 모두 합쳐서 보여 줌.
+
+1. 주소 모으기
+   - 계정이 다르면 그 계정으로 구글 캘린더에 로그인해서 복사 (위 1번과 같은 경로)
+   - 한 계정 안의 다른 캘린더(내가 만든 캘린더)도 캘린더마다 주소가 따로 있음
+   - 공유받은 캘린더는 권한에 따라 비공개 주소가 안 보일 수 있음. 그때는 그 캘린더 주인에게 요청
+   - 회사 계정은 관리자가 비공개 주소를 막아 두었으면 「캘린더 통합」에 주소가 없음
+2. 저장 : 둘 중 하나
+   - **항목을 나눠 저장 (권장)** : 캘린더마다 이름을 바꿔 저장. 최대 9개 (`ical` ~ `ical9`)
+     ```zsh
+     security add-generic-password -a ical  -s meeting-timer -T "" -w   # 첫 번째 캘린더
+     security add-generic-password -a ical2 -s meeting-timer -T "" -w   # 두 번째 캘린더
+     security add-generic-password -a ical3 -s meeting-timer -T "" -w   # 세 번째 …
+     ```
+     - 앱을 켤 때 확인 창이 항목 수만큼 뜸 (2개면 2번). **모두 「허용」**
+     - 한 캘린더만 바꾸거나 지우기 쉬움
+   - **한 항목에 몰아 저장** : 주소를 띄어 써서 한 번에 붙여 넣기. 확인 창이 한 번만 뜸
+     ```zsh
+     security add-generic-password -a ical -s meeting-timer -T "" -w
+     # 암호 입력 칸에 「주소1 주소2」처럼 띄어 써서 붙여 넣기
+     ```
+     - 주소 하나를 바꿀 때도 전부 다시 입력해야 함
+3. 확인 : 메뉴바 메뉴 → **「연동된 캘린더: N개」**
+   - 하위 메뉴에 `캘린더 이름 · 캘린더 ID(보통 메일 주소)`가 줄마다 나옴. 비밀 주소 전체는 안 보임
+   - 개수가 모자라면 아래 표대로 확인
+
+| 메뉴에 보이는 것 | 뜻 | 할 일 |
+| --- | --- | --- |
+| `⚠ 키체인 ical2 : 허용 안 됨` | 그 항목의 확인 창을 거부했거나 놓침 | 「지금 새로고침」 → 다시 뜬 확인 창에서 「허용」 |
+| `⚠ 캘린더이름 (받기 실패)` | 주소는 읽었지만 구글에서 받지 못함 | 인터넷 확인. 계속되면 주소가 재설정됐을 수 있으니 새 주소로 다시 저장 |
+| 캘린더가 아예 안 보임 | 저장 이름이 `ical`~`ical9`가 아니거나 `-s meeting-timer`를 빠뜨림 | `security find-generic-password -a ical2 -s meeting-timer` 로 항목이 있는지 확인 (값은 안 나옴) |
+| 같은 이름이 두 번 | 같은 주소를 두 항목에 저장 | 한 항목을 지우고 다른 캘린더 주소로 다시 저장 |
+
+- 여러 캘린더에 같은 회의(제목·시작 시각이 같음)가 있으면 한 번만 보임
+- 거절한 일정은 캘린더마다 그 캘린더 주인의 메일로 판단해서 뺌. 계정이 여러 개여도 `my_email`은 비워 둬도 됨
+- 저장한 뒤에는 앱을 다시 켜야 새 캘린더를 읽음 (메뉴 「종료」 → `./run.sh`)
 
 ## 로그인 때 자동 실행
 ```zsh
@@ -72,7 +109,7 @@ PYTHON=python3.12 ./setup.sh        # 파이썬을 골라 쓸 때
 | 항목 | 기본값 | 뜻 |
 | --- | --- | --- |
 | `ical_urls` | `[]` | 비우면 키체인 사용 (권장). 여기 넣으면 키체인 대신 이 주소 사용 |
-| `my_email` | `""` | 거절한 일정을 빼는 기준. 비우면 캘린더 이름(구글 기본 캘린더는 소유자 메일)으로 추정 |
+| `my_email` | `""` | 거절한 일정을 빼는 기준 메일. 비워도 캘린더마다 주인 메일(캘린더 ID)로 판단. 주소에 메일이 안 드러나는 캘린더를 쓸 때만 넣음 |
 | `refresh_minutes` | `5` | 캘린더를 다시 받는 주기(분) |
 | `alert_minutes` | `[]` | 화면 오른쪽 위 알림 시점(회의 몇 분 전). 기본은 없음. 구글 캘린더 자체 알림과 겹치지 않게 함. 예 `[10, 5]` |
 | `move_alert_minutes` | `3` | 회의 몇 분 전에 「지금 이동하세요」 경고창을 띄울지. 메뉴에서 1~5분으로 바꾸거나 끌 수 있음. `0` 이면 끔 |
@@ -121,8 +158,27 @@ PYTHON=python3.12 ./setup.sh
    ```zsh
    security add-generic-password -a ical -s meeting-timer -T "" -w
    ```
-   `-T ""` trusts no app, so macOS asks for your login password every time the app reads it. Add more calendars as `-a ical2` … `-a ical9`.
+   `-T ""` trusts no app, so macOS asks for your login password every time the app reads it.
 3. `./run.sh`, then click **Allow** (not *Always Allow*) in the Keychain prompt. The URL is read once at startup and kept only in memory.
+
+### Multiple calendars
+Store **one secret iCal address per calendar**; the app merges them.
+
+1. Collect the addresses. For another Google account, sign in with that account and copy its address the same way. Calendars shared with you may not show a secret address unless you have enough permission, and Workspace admins can disable it entirely.
+2. Save them, either:
+   - **One entry per calendar (recommended)**: `-a ical`, `-a ical2`, … up to `-a ical9`.
+     ```zsh
+     security add-generic-password -a ical  -s meeting-timer -T "" -w
+     security add-generic-password -a ical2 -s meeting-timer -T "" -w
+     ```
+     macOS asks once per entry at startup; allow each one.
+   - **All in one entry**: paste the addresses separated by spaces at the password prompt. Only one prompt, but you must re-enter all of them to change one.
+3. Check the menu bar menu → **연동된 캘린더: N개** (linked calendars). Each line shows `calendar name · calendar ID` (usually the owner's email); the secret address itself is never shown.
+   - `⚠ 키체인 ical2 : 허용 안 됨` — you denied or missed that Keychain prompt. Click 지금 새로고침 (refresh) and it asks again for that entry only.
+   - `⚠ … (받기 실패)` — the address was read but the download failed. Check your network, or the address may have been reset.
+   - A calendar is missing entirely — check the entry name (`ical`…`ical9`) and `-s meeting-timer`.
+
+The same meeting in several calendars (same title and start time) is shown once. Declined events are filtered per calendar using that calendar's owner email, so `my_email` can stay empty. Restart the app after adding a calendar.
 
 ### Start at login
 ```zsh

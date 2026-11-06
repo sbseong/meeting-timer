@@ -11,6 +11,7 @@ import re
 import subprocess
 import threading
 import time
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass, asdict
 from datetime import date, datetime, timedelta
@@ -44,22 +45,39 @@ KEYCHAIN_SERVICE = "meeting-timer"
 KEYCHAIN_ACCOUNTS = ["ical"] + [f"ical{i}" for i in range(2, 10)]  # ical, ical2 … ical9
 
 
-def read_keychain_urls() -> list[str]:
+def read_keychain_urls(accounts: list[str] = KEYCHAIN_ACCOUNTS) -> tuple[dict[str, list[str]], list[str]]:
     """맥 키체인에 저장한 비공개 iCal 주소를 읽는다. 캘린더마다 항목을 따로 둔다.
     저장: security add-generic-password -a ical  -s meeting-timer -T "" -w   (첫 캘린더)
           security add-generic-password -a ical2 -s meeting-timer -T "" -w   (두 번째) …
     -T "" 로 저장하면 읽을 때마다 맥이 확인 창을 띄운다 (항목마다 한 번씩).
-    없는 항목은 확인 창 없이 건너뛴다. 거부한 항목도 건너뛴다.
-    한 항목에 주소 여러 개를 공백·쉼표로 넣어도 된다."""
-    urls: list[str] = []
-    for account in KEYCHAIN_ACCOUNTS:
-        r = subprocess.run(
-            ["security", "find-generic-password", "-a", account, "-s", KEYCHAIN_SERVICE, "-w"],
-            capture_output=True, text=True,
-        )
+    한 항목에 주소 여러 개를 공백·쉼표로 넣어도 된다.
+    돌려주는 값: ({항목 이름: [주소…]}, [있는데 허용 안 된 항목 이름])."""
+    found: dict[str, list[str]] = {}
+    denied: list[str] = []
+    for account in accounts:
+        base = ["security", "find-generic-password", "-a", account, "-s", KEYCHAIN_SERVICE]
+        # -w 없이 찾으면 값을 꺼내지 않으므로 확인 창 없이 항목이 있는지만 안다
+        if subprocess.run(base, capture_output=True).returncode != 0:
+            continue
+        r = subprocess.run(base + ["-w"], capture_output=True, text=True)
         if r.returncode == 0:
-            urls += [u for u in re.split(r"[\s,]+", r.stdout.strip()) if u]
-    return urls
+            found[account] = [u for u in re.split(r"[\s,]+", r.stdout.strip()) if u]
+        else:
+            denied.append(account)
+    return found, denied
+
+
+def calendar_id(url: str) -> str:
+    """iCal 주소에서 캘린더 ID 만 꺼낸다. 비밀 토큰(private-…)은 버린다.
+    구글 주소 꼴: https://calendar.google.com/calendar/ical/<캘린더 ID>/private-<토큰>/basic.ics
+    구글 꼴이 아니면 호스트 이름만 돌려준다."""
+    parts = urllib.parse.urlsplit(url)
+    segs = parts.path.split("/")
+    if "ical" in segs:
+        i = segs.index("ical")
+        if i + 1 < len(segs) and segs[i + 1]:
+            return urllib.parse.unquote(segs[i + 1])
+    return parts.hostname or "(주소 형식 모름)"
 
 
 def load_config() -> dict:
@@ -110,8 +128,9 @@ def _find_meeting_link(comp) -> str:
     return urls[0] if urls else ""
 
 
-def _declined_by_me(comp, my_email: str) -> bool:
-    if not my_email:
+def _declined_by_me(comp, my_emails: set[str]) -> bool:
+    """내 메일 주소(여러 개일 수 있음) 중 하나라도 이 일정을 거절했으면 True."""
+    if not my_emails:
         return False
     attendees = comp.get("ATTENDEE")
     if attendees is None:
@@ -119,8 +138,9 @@ def _declined_by_me(comp, my_email: str) -> bool:
     if not isinstance(attendees, list):
         attendees = [attendees]
     for a in attendees:
-        if str(a).lower().replace("mailto:", "") == my_email.lower():
-            return str(a.params.get("PARTSTAT", "")).upper() == "DECLINED"
+        if str(a).lower().replace("mailto:", "") in my_emails:
+            if str(a.params.get("PARTSTAT", "")).upper() == "DECLINED":
+                return True
     return False
 
 
@@ -135,20 +155,21 @@ def _to_local(v) -> tuple[datetime, bool]:
     raise TypeError(v)
 
 
-def parse_ics(raw: bytes, cfg: dict, start: datetime, end: datetime) -> list[Event]:
+def parse_ics(raw: bytes, cfg: dict, start: datetime, end: datetime, cal_id: str = "") -> tuple[str, list[Event]]:
+    """(캘린더 이름, 기간 안 일정) 을 돌려준다. cal_id 는 주소 속 캘린더 ID(보통 소유자 메일)."""
     cal = icalendar.Calendar.from_ical(raw)
-    # 구글 기본 캘린더의 이름(X-WR-CALNAME)은 소유자 메일 주소다
-    my_email = cfg.get("my_email") or ""
-    if not my_email:
-        calname = str(cal.get("X-WR-CALNAME", ""))
-        my_email = calname if "@" in calname else ""
+    name = str(cal.get("X-WR-CALNAME", "")) or "(이름 없는 캘린더)"
+    # 거절한 일정을 뺄 때 쓸 내 메일: config 의 my_email + 이 캘린더 소유자 메일.
+    # 계정이 여러 개면 캘린더마다 그 계정 메일로 거른다.
+    # 구글 기본 캘린더는 이름(X-WR-CALNAME)과 캘린더 ID 가 소유자 메일 주소다.
+    my_emails = {e.strip().lower() for e in (cfg.get("my_email") or "", name, cal_id) if "@" in e}
     events: list[Event] = []
     for comp in recurring_ical_events.of(cal).between(start, end):
         if str(comp.get("STATUS", "")).upper() == "CANCELLED":
             continue
         if str(comp.get("TRANSP", "")).upper() == "TRANSPARENT" and not cfg.get("include_free", True):
             continue
-        if _declined_by_me(comp, my_email):
+        if _declined_by_me(comp, my_emails):
             continue
         s, all_day = _to_local(comp.decoded("DTSTART"))
         if all_day and not cfg.get("include_all_day"):
@@ -166,7 +187,7 @@ def parse_ics(raw: bytes, cfg: dict, start: datetime, end: datetime) -> list[Eve
             link=_find_meeting_link(comp),
         ))
     events.sort(key=lambda ev: ev.start)
-    return events
+    return name, events
 
 
 class CalendarFeed:
@@ -177,12 +198,16 @@ class CalendarFeed:
         self.events: list[Event] = []
         self.last_ok: datetime | None = None
         self.last_error: str = ""
+        # 연동된 캘린더 목록: [{"name": 이름, "ok": 받기 성공 여부}]. 메뉴에 보여 준다
+        self.sources: list[dict] = []
         self._lock = threading.Lock()
         self._wake = threading.Event()
         # 키체인 주소는 앱을 켤 때 한 번만 읽어 메모리에 둔다 (디스크에는 쓰지 않음).
-        # 실패하면 자동으로 다시 묻지 않고, 사용자가 '지금 새로고침'을 눌렀을 때만 다시 묻는다.
-        self._kc_urls: list[str] | None = None
-        self._kc_may_ask = True
+        # 허용 안 된 항목은 자동으로 다시 묻지 않고, 사용자가 '지금 새로고침'을 눌렀을 때만 그 항목만 다시 묻는다.
+        self._kc: dict[str, list[str]] = {}     # 읽은 항목 → 주소들
+        self.kc_denied: list[str] = []          # 있는데 허용 안 된 항목 (메뉴에 표시)
+        self._kc_read_once = False
+        self._kc_retry = False
 
     # --- 받아오기 ---
     def refresh(self) -> None:
@@ -195,14 +220,21 @@ class CalendarFeed:
             return
         all_events: list[Event] = []
         errors = []
-        for url in urls:
+        sources = []
+        for i, url in enumerate(urls, 1):  # i 는 못 받은 캘린더의 이전 이름을 찾는 데 씀
             try:
                 req = urllib.request.Request(url, headers={"User-Agent": "meeting-timer"})
                 with urllib.request.urlopen(req, timeout=20) as r:
-                    all_events += parse_ics(r.read(), self.cfg, *window)
+                    name, evs = parse_ics(r.read(), self.cfg, *window, cal_id=calendar_id(url))
+                all_events += evs
+                sources.append({"name": name, "id": calendar_id(url), "ok": True})
             except Exception as e:  # 네트워크·파싱 실패해도 앱은 계속 돈다
                 # 오류 문구에 비공개 주소가 섞여 나오지 않게 가린다
                 errors.append(f"{type(e).__name__}: {e}".replace(url, "(비공개 주소)"))
+                # 못 받은 캘린더는 이름을 모르므로 직전에 받은 이름을 쓴다
+                prev = self.sources[i - 1]["name"] if i <= len(self.sources) else f"캘린더 {i}"
+                sources.append({"name": prev, "id": calendar_id(url), "ok": False})
+        self.sources = sources
         if errors and not all_events:
             self.last_error = "; ".join(errors)
             return
@@ -222,10 +254,15 @@ class CalendarFeed:
         """config.json 에 주소가 있으면 그것을, 없으면 키체인 값(한 번 읽어 둔 것)을 쓴다."""
         if self.cfg.get("ical_urls"):
             return list(self.cfg["ical_urls"])
-        if self._kc_urls is None and self._kc_may_ask:
-            self._kc_may_ask = False
-            self._kc_urls = read_keychain_urls() or None
-        return self._kc_urls or []
+        # 확인 창은 여기(백그라운드 스레드)에서만 띄운다. 메뉴 스레드가 멈추지 않게.
+        if not self._kc_read_once or self._kc_retry:
+            ask = KEYCHAIN_ACCOUNTS if not self._kc_read_once else (self.kc_denied or ([] if self._kc else KEYCHAIN_ACCOUNTS))
+            self._kc_read_once, self._kc_retry = True, False
+            if ask:
+                found, denied = read_keychain_urls(ask)
+                self._kc.update(found)
+                self.kc_denied = [a for a in self.kc_denied if a not in found and a not in ask] + denied
+        return [u for a in KEYCHAIN_ACCOUNTS for u in self._kc.get(a, [])]
 
     def start_background(self) -> None:
         def loop():
@@ -236,9 +273,9 @@ class CalendarFeed:
         threading.Thread(target=loop, daemon=True).start()
 
     def refresh_now(self) -> None:
-        """사용자가 직접 누른 새로고침. 키체인을 아직 못 읽었으면 이때 다시 묻는다."""
-        if self._kc_urls is None:
-            self._kc_may_ask = True
+        """사용자가 직접 누른 새로고침. 허용 안 된 키체인 항목이 있으면 그 항목만 다시 묻는다."""
+        if self.kc_denied or not self._kc:
+            self._kc_retry = True
         self._wake.set()
 
     # --- 조회 ---
@@ -257,6 +294,8 @@ class CalendarFeed:
             "tomorrow": [ev.to_json() for ev in events if ev.start.date() == today + timedelta(days=1)],
             "last_ok": self.last_ok.isoformat() if self.last_ok else None,
             "error": self.last_error,
+            "calendars": list(self.sources),
+            "keychain_denied": list(self.kc_denied),
         }
 
     def next_event(self, now: datetime | None = None) -> Event | None:
