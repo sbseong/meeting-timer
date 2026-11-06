@@ -1,7 +1,7 @@
 """구글 캘린더 비공개 iCal 주소에서 오늘~내일 일정을 읽어 온다.
 
 - 반복 일정은 recurring_ical_events 로 펼친다.
-- 종일 일정, 내가 거절한 일정, '한가함(TRANSPARENT)' 일정은 기본으로 뺀다.
+- 종일 일정, 내가 거절한 일정은 기본으로 뺀다. '한가함(TRANSPARENT)' 일정은 기본으로 보인다 (include_free).
 - 네트워크가 끊겨도 마지막으로 받은 일정을 계속 쓴다.
 """
 from __future__ import annotations
@@ -30,6 +30,7 @@ DEFAULT_CONFIG = {
     "move_alert_minutes": 3,     # 회의 몇 분 전에 '이동하세요' 경고창을 띄울지. 0 이면 끔
     "popup_at_start": True,      # 시작 시각에 화면 가운데 경고창
     "include_all_day": False,
+    "include_free": True,        # '한가함'으로 표시된 일정도 보일지. 남이 만든 회의가 한가함으로 오는 경우가 있어 기본은 보임
     "port": 8765,
 }
 
@@ -145,7 +146,7 @@ def parse_ics(raw: bytes, cfg: dict, start: datetime, end: datetime) -> list[Eve
     for comp in recurring_ical_events.of(cal).between(start, end):
         if str(comp.get("STATUS", "")).upper() == "CANCELLED":
             continue
-        if str(comp.get("TRANSP", "")).upper() == "TRANSPARENT":
+        if str(comp.get("TRANSP", "")).upper() == "TRANSPARENT" and not cfg.get("include_free", True):
             continue
         if _declined_by_me(comp, my_email):
             continue

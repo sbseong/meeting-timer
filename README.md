@@ -21,7 +21,7 @@
 - 대시보드 : http://127.0.0.1:8765
   - 지금 회의(진행 막대) / 다음 회의 카운트다운 / 두 회의 사이 여유 시간 / 오늘·내일 일정
   - 지각이면 화면 깜빡임
-- 빼는 일정 : 종일 일정, 내가 거절한 일정, 취소된 일정, '한가함'으로 표시된 일정
+- 빼는 일정 : 종일 일정, 내가 거절한 일정, 취소된 일정 ('한가함' 일정은 기본으로 보임, `include_free`로 끔)
 - 여러 캘린더 지원 (같은 회의는 한 번만 표시)
 
 ## 요구 사항
@@ -78,6 +78,7 @@ PYTHON=python3.12 ./setup.sh        # 파이썬을 골라 쓸 때
 | `move_alert_minutes` | `3` | 회의 몇 분 전에 「지금 이동하세요」 경고창을 띄울지. 메뉴에서 1~5분으로 바꾸거나 끌 수 있음. `0` 이면 끔 |
 | `popup_at_start` | `true` | 시작 시각 경고창 사용 여부 |
 | `include_all_day` | `false` | 종일 일정 포함 여부 |
+| `include_free` | `true` | '한가함'으로 표시된 일정 포함 여부 |
 | `port` | `8765` | 대시보드 포트 |
 
 ## 보안 메모
@@ -130,9 +131,9 @@ PYTHON=python3.12 ./setup.sh
 ```
 
 ### Config (optional)
-Copy `config.example.json` to `config.json`. See the table above for keys (`alert_minutes`, `refresh_minutes`, `my_email`, `include_all_day`, `port`, …).
+Copy `config.example.json` to `config.json`. See the table above for keys (`alert_minutes`, `refresh_minutes`, `my_email`, `include_all_day`, `include_free`, `port`, …).
 
-Excluded events: all-day, declined by you, cancelled, and "free" (transparent) events.
+Excluded events: all-day, declined by you, and cancelled. Events marked "free" (transparent) are shown by default; set `include_free` to `false` to hide them.
 
 ## License
 MIT

@@ -6,5 +6,6 @@
   "move_alert_minutes": 3,
   "popup_at_start": true,
   "include_all_day": false,
+  "include_free": true,
   "port": 8765
 }
